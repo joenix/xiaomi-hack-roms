@@ -1,0 +1,151 @@
+{
+  "updatedAt": "2026-10-20T19:48:33.001Z",
+  "items": [
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD大航海时代2_意志之路1.9F5+_Gens可玩版v3_小咪优化.bin",
+      "source": "libretro",
+      "title": "大航海时代2 意志之路1.9F5+ Gens可玩版v3",
+      "matchedTitle": "Daikoukai Jidai II (Japan)",
+      "score": 1,
+      "query": "Daikoukai Jidai II"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD斗技王_特殊名字全装备版_小咪优化版.bin",
+      "source": "libretro",
+      "title": "斗技王 特殊名字全装备版",
+      "matchedTitle": "Tougiou King Colossus (Japan)",
+      "score": 1,
+      "query": "Tougiou King Colossus"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD光明力量1-众神遗产_Alternate_小咪优化版.bin",
+      "source": "libretro",
+      "title": "光明力量1-众神遗产 Alternate",
+      "matchedTitle": "Shining Force - Kamigami no Isan (Japan) (Mega Drive Mini)",
+      "score": 1,
+      "query": "Shining Force - Kamigami no Isan"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD光明力量2_上帝之战_小咪优化.bin",
+      "source": "libretro",
+      "title": "光明力量2 上帝之战",
+      "matchedTitle": "Shining Force II (Europe)",
+      "score": 1,
+      "query": "Shining Force II"
+    },
+    {
+      "rom": "roms/MD/MD光明力量2_意志之路2.2_小咪优化版.bin",
+      "source": "reuse",
+      "matchedTitle": "Shining Force II (Europe)"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD光之继承者-高清宽屏增值版_小咪优化.bin",
+      "source": "libretro",
+      "title": "光之继承者-高清宽屏增值版",
+      "matchedTitle": "Beyond Oasis (USA)",
+      "score": 1,
+      "query": "Beyond Oasis"
+    },
+    {
+      "rom": "roms/MD/MD光之继承者-高清宽屏增值版v2_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Beyond Oasis (USA)"
+    },
+    {
+      "rom": "roms/MD/MD光之继承者-高清宽屏增值版v3_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Beyond Oasis (USA)"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD梦幻模拟战2-帝国之路·暗灭_秘籍修复版_小咪优化.bin",
+      "source": "libretro",
+      "title": "梦幻模拟战2-帝国之路·暗灭 秘籍修复版",
+      "matchedTitle": "Langrisser II (Japan)",
+      "score": 1,
+      "query": "Langrisser II"
+    },
+    {
+      "rom": "roms/MD/MD梦幻模拟战2-帝国之路·暗灭·专家增值版_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Langrisser II (Japan)"
+    },
+    {
+      "rom": "roms/MD/MD梦幻模拟战2-狮子骑士崛起·一周目PLUS增值版v1_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Langrisser II (Japan)"
+    },
+    {
+      "rom": "roms/MD/MD梦幻模拟战2-狮子骑士崛起·一周目PLUS增值版v2_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Langrisser II (Japan)"
+    },
+    {
+      "rom": "roms/MD/MD梦幻模拟战2-狮子骑士崛起·一周目PLUS增值版v3_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Langrisser II (Japan)"
+    },
+    {
+      "rom": "roms/MD/MD梦幻模拟战2-狮子骑士崛起·一周目PLUS增值版v4_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Langrisser II (Japan)"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD梦幻之星4_意志之路v2.2b_小咪优化版.bin",
+      "source": "libretro",
+      "title": "梦幻之星4 意志之路v2.2b",
+      "matchedTitle": "Phantasy Star IV (Europe)",
+      "score": 1,
+      "query": "Phantasy Star IV"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD怒之铁拳2_忍者神龟专家增值版_小咪优化.bin",
+      "source": "libretro",
+      "title": "怒之铁拳2 忍者神龟专家增值版",
+      "matchedTitle": "Bare Knuckle II - Shitou e no Requiem ~ Streets of Rage II (Japan, Europe) (En,Ja)",
+      "score": 1,
+      "query": "Bare Knuckle II - Shitou e no Requiem ~ Streets of Rage II"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD太阁立志传_8类型直选_小咪优化版.bin",
+      "source": "libretro",
+      "title": "太阁立志传 8类型直选",
+      "matchedTitle": "Taikou Risshiden (Japan)",
+      "score": 1,
+      "query": "Taikou Risshiden"
+    },
+    {
+      "rom": "roms/MD/MD太阁立志传_PRO_v1.0_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Taikou Risshiden (Japan)"
+    },
+    {
+      "rom": "roms/MD/MD太阁立志传_PRO_v1.1_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Taikou Risshiden (Japan)"
+    },
+    {
+      "rom": "roms/MD/MD太阁立志传_PRO_v1.6_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Taikou Risshiden (Japan)"
+    },
+    {
+      "rom": "roms/MD/MD太阁立志传_PRO_v1.9_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Taikou Risshiden (Japan)"
+    },
+    {
+      "rom": "roms/MD/MD太阁立志传_PRO_v1.21_小咪优化.bin",
+      "source": "reuse",
+      "matchedTitle": "Taikou Risshiden (Japan)"
+    }
+  ]
+}

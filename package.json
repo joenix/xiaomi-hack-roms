@@ -1,0 +1,36 @@
+{
+  "name": "xiaomi-hack-roms",
+  "private": true,
+  "version": "0.8.7",
+  "type": "module",
+  "scripts": {
+    "dev": "node tools/scan-roms.mjs --no-covers && vite --config ./vite.config.js --host 127.0.0.1",
+    "build": "node tools/scan-roms.mjs --no-covers && node tools/check-public-roms.mjs && vite build --config ./vite.config.js",
+    "preview": "vite preview --config ./vite.config.js --host 127.0.0.1",
+    "roms:scan": "node tools/scan-roms.mjs",
+    "roms:watch": "node tools/scan-roms.mjs --watch",
+    "roms:dry-run": "node tools/scan-roms.mjs --dry-run",
+    "roms:covers": "node tools/scan-roms.mjs --no-covers && node tools/fetch-covers.mjs",
+    "publish": "node tools/release.mjs",
+    "deploy:site": "node tools/deploy-site.mjs",
+    "deploy": "node tools/deploy-all.mjs",
+    "doctor": "node tools/doctor.mjs",
+    "test": "node --test tests/*.test.js",
+    "doctor:vue": "node tools/doctor-vue.mjs",
+    "roms:covers:report": "node tools/cover-report.mjs",
+    "covers:upload": "node tools/upload-covers.mjs",
+    "build:pages": "vite build --config ./vite.config.js --mode pages --base=/xiaomi-hack-roms/ && node tools/check-pages.mjs",
+    "preview:pages": "vite preview --config ./vite.config.js --base=/xiaomi-hack-roms/ --host 127.0.0.1"
+  },
+  "dependencies": {
+    "vue": "^3.5.18"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "vite": "^7.1.5",
+    "ali-oss": "^6.23.0"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

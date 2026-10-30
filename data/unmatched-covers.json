@@ -1,0 +1,37 @@
+{
+  "updatedAt": "2026-10-20T19:48:33.000Z",
+  "summary": {
+    "unmatched": 2,
+    "downloaded": 9,
+    "reused": 13,
+    "skipped": 2
+  },
+  "items": [
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD阿斯特堡的恶魔_秘籍版_小咪优化.md",
+      "title": "阿斯特堡的恶魔 秘籍版",
+      "queries": [
+        "Demons of Asteborg",
+        "DEMONS OF ASTEBORG",
+        "阿斯特堡的恶魔 秘籍版"
+      ],
+      "reason": "not-found",
+      "details": "所有启用的来源均未找到满足阈值的封面",
+      "identity": "builtin-identity"
+    },
+    {
+      "platform": "MD",
+      "rom": "roms/MD/MD阿斯特博格兄弟_秘籍版_小咪优化.md",
+      "title": "阿斯特博格兄弟 秘籍版",
+      "queries": [
+        "Astebros",
+        "ASTEBROS",
+        "阿斯特博格兄弟 秘籍版"
+      ],
+      "reason": "not-found",
+      "details": "所有启用的来源均未找到满足阈值的封面",
+      "identity": "builtin-identity"
+    }
+  ]
+}
