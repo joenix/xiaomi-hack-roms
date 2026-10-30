@@ -1,15 +1,19 @@
-# GitHub Pages 展示版
+# GitHub Pages 游戏大厅
 
 线上地址：https://joenix.github.io/xiaomi-hack-roms/
 
-此仓库仅发布游戏大厅、目录和封面，不包含 ROM、BIOS、存档或私人配置。线上游戏卡片不可启动游戏。
+前端与资源独立发布。生产构建每次打开页面读取
+`https://joenix.github.io/xiaomi-hack-roms-libraries/library.json`，按其中的版本目录加载游戏列表、封面、ROM 和播放器配置。
 
-- `pnpm install --frozen-lockfile`
-- `pnpm run build:pages`：无需本地 ROM，构建到 `dist/`，校验发布包不包含游戏文件。
-- `pnpm run preview:pages`：本地预览，访问输出地址下的 `/xiaomi-hack-roms/`。
-- 推送到 `main` 后，由 GitHub Actions 自动测试和部署。仓库 Settings → Pages 的发布源应设为 GitHub Actions。
+日常更新游戏只需维护 `/Users/joenix/Game/@小咪优化/xiaomi-hack-roms-libraries` 并执行 `pnpm run publish`。不需要重新构建或推送本前端。
 
-更新目录可修改 `public/games.json`，封面放在 `public/covers/`。本地扫描仍使用原有命令和不入库的 `roms.config.json`；不要在云端执行扫描命令。
+- `library.json` 的 `playEnabled` 控制游玩入口，`notice` 控制大厅公告。
+- ROM、封面和播放器配置按资源库根地址解析；前端不包含 ROM。
+- 配置读取失败会展示明确错误，不使用过时目录掩盖故障。
+- 现有打开页面需刷新读取新目录。ROM 与目录使用内容哈希地址。
+- `pnpm run build:pages` 构建前端，`pnpm run preview:pages` 本地预览生产模式。
+- 本地开发的原有 ROM 扫描和键位设置保持原流程。
+- 推送到 `main` 后 GitHub Actions 自动测试并发布前端，仅在修改网站代码时需要。
 
 ---
 

@@ -1,9 +1,12 @@
+import { loadLibrary } from './library.js';
 /**
  * 小咪 Hack Roms 原生 EmulatorJS 播放器（独立 HTML 页面）。
  * 这里不创建自定义模拟器 UI，只负责数据校验、启动、错误提示。
  */
 const base = import.meta.env.BASE_URL;
 const rootUrl = new URL(base, location.origin);
+let resourceRoot = rootUrl;
+let libraryContext = null;
 const params = new URLSearchParams(location.search);
 const status = document.querySelector('#status');
 let emulatorReady = false;
@@ -45,8 +48,8 @@ function normalizeRomPath(filePath) {
   }
   const segments = filePath.split('/');
   if (segments.some(part => !part || part === '.' || part === '..')) throw new Error('ROM 路径不合法');
-  const url = new URL(segments.map(encodeURIComponent).join('/'), rootUrl);
-  if (url.origin !== location.origin || !url.pathname.startsWith(rootUrl.pathname)) {
+  const url = new URL(segments.map(encodeURIComponent).join('/'), resourceRoot);
+  if (url.origin !== location.origin || !url.pathname.startsWith(resourceRoot.pathname)) {
     throw new Error('ROM 必须位于当前网站的资源目录内');
   }
   return url.href;
@@ -67,6 +70,11 @@ async function checkRom(url) {
   return response;
 }
 async function loadGames() {
+  if (import.meta.env.MODE === 'pages') {
+    libraryContext = await loadLibrary({ origin: location.origin });
+    resourceRoot = libraryContext.resourceRoot;
+    return libraryContext.games;
+  }
   const response = await fetch(`${base}games.json`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`games.json 请求失败：HTTP ${response.status}`);
   const games = await response.json();
@@ -74,7 +82,7 @@ async function loadGames() {
   return games;
 }
 async function loadPlayerSettings() {
-  const response = await fetch(`${base}player-config.json`, { cache: 'no-store' });
+  const response = await fetch(libraryContext?.playerConfigUrl || `${base}player-config.json`, { cache: 'no-store' });
   if (!response.ok) throw new Error(`播放器配置加载失败：HTTP ${response.status}，请执行 npm run roms:scan`);
   const settings = await response.json();
   if (!settings || typeof settings !== 'object' || !settings.controls) throw new Error('player-config.json 格式错误，请重新扫描');
@@ -234,19 +242,18 @@ function loadEmulatorScript(url) {
 }
 
 async function start() {
-  if (import.meta.env.MODE === 'pages') {
-    return errorView('ROM 暂未上线', '当前网站仅展示游戏目录和封面，暂不提供在线游玩。');
-  }
   try {
     const gameKey = params.get('game');
     let game;
     if (gameKey) {
       const games = await loadGames();
+      if (libraryContext && !libraryContext.config.playEnabled) return errorView('暂未开放在线游玩', libraryContext.config.notice || '资源库当前暂停在线游玩，请稍后再试。');
       game = games.find(item => item.id === gameKey);
       if (!game) return errorView('没有找到这个游戏', `games.json 中不存在「${gameKey}」，请重新扫描 ROM。`);
       if (game.placeholder) return errorView('这个封面只是演示', '项目里没有附带这个 ROM。请在 roms.config.json 指定自己的 ROM 目录，运行 npm run roms:scan 后再试。');
     } else {
       // 临时测试 ROM，不会保存进 JSON：?rom=roms/MD/test.bin&core=segaMD
+      if (import.meta.env.MODE === 'pages') return errorView('还没有选择游戏', '请从游戏大厅选择游戏。');
       const rom = params.get('rom');
       const core = params.get('core');
       if (!rom || !core) return errorView('还没有选择游戏', '请从游戏大厅选择游戏，或提供 rom 和 core 参数。');

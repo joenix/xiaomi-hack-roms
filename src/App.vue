@@ -1,8 +1,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
+import { loadLibrary, resolveLibraryAsset } from './library.js';
 
 const base = import.meta.env.BASE_URL;
-const catalogOnly = import.meta.env.MODE === 'pages';
+const remoteLibrary = import.meta.env.MODE === 'pages';
+const libraryConfig = ref({ playEnabled: !remoteLibrary, notice: '' });
+const resourceRoot = ref(new URL(base, location.origin).href);
+const catalogOnly = computed(() => !libraryConfig.value.playEnabled);
+const notice = computed(() => libraryConfig.value.notice || (catalogOnly.value ? '当前为游戏目录展示版，ROM 暂未上线，暂不提供在线游玩。' : ''));
 const query = new URLSearchParams(location.search);
 const platforms = [
   { id: 'all', name: '全部平台', sub: 'ALL' },
@@ -51,7 +56,7 @@ const matchingGames = computed(() => {
 const filtered = computed(() => search.value.trim() || platform.value !== 'all' || format.value !== 'all' || folder.value !== 'all' || sort.value !== 'name');
 function clearFilters() { search.value = ''; platform.value = 'all'; format.value = 'all'; folder.value = 'all'; sort.value = 'name'; }
 function countFor(id) { return id === 'all' ? games.value.length : games.value.filter(game => game.platform === id).length; }
-function fileUrl(relative) { return `${base}${String(relative).replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')}`; }
+function fileUrl(relative) { return resolveLibraryAsset(relative, resourceRoot.value); }
 function playUrl(game) { return `${base}play/?game=${encodeURIComponent(game.id)}${game.platform === 'PSP' ? '&threads=1' : ''}`; }
 function shortName(title) { return String(title || 'ROM').slice(0, 2); }
 function formatSize(bytes) {
@@ -79,10 +84,18 @@ watch([search, platform, format, folder, sort], () => {
 });
 onMounted(async () => {
   try {
-    const response = await fetch(`${base}games.json`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const list = await response.json();
-    if (!Array.isArray(list)) throw new Error('games.json 必须是数组');
+    let list;
+    if (remoteLibrary) {
+      const library = await loadLibrary({ origin: location.origin });
+      resourceRoot.value = library.resourceRoot.href;
+      libraryConfig.value = library.config;
+      list = library.games;
+    } else {
+      const response = await fetch(`${base}games.json`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      list = await response.json();
+      if (!Array.isArray(list)) throw new Error('games.json 必须是数组');
+    }
     games.value = list.filter(game => supportedPlatforms.has(game.platform) && game.rom && !game.placeholder);
   } catch (error) { loadError.value = String(error?.message || error); }
   finally { loading.value = false; }
@@ -111,13 +124,13 @@ onMounted(async () => {
     </section>
 
     <main class="container site-main">
-      <p v-if="catalogOnly" class="catalog-notice" role="status">当前为游戏目录展示版，ROM 暂未上线，暂不提供在线游玩。</p>
+      <p v-if="notice" class="catalog-notice" role="status">{{ notice }}</p>
       <section id="filters" class="filter-panel" aria-label="游戏检索筛选面板">
         <div class="panel-heading"><div><span class="panel-kicker">FIND A GAME</span><h2>发现游戏<span class="heading-accent">.</span></h2></div><span class="panel-caption">SEARCH · FILTER · PLAY</span></div>
         <div class="search-area">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.2"/><path d="m16.5 16.5 5 5"/></svg>
           <input v-model="search" type="search" placeholder="搜索名称、ROM 文件名、路径..." aria-label="搜索游戏" spellcheck="false" />
-          <span class="search-shortcut">本地目录检索</span>
+          <span class="search-shortcut">{{ remoteLibrary ? '游戏资源库检索' : '本地目录检索' }}</span>
         </div>
         <div class="filter-grid">
           <label class="filter-field"><span>游戏平台 · 来自一级目录</span><select v-model="platform" aria-label="游戏平台"><option value="all">全部平台</option><option v-for="sys in platforms.slice(1)" :key="sys.id" :value="sys.id">{{ sys.id }} · {{ sys.sub }}</option></select></label>
@@ -130,9 +143,9 @@ onMounted(async () => {
       </section>
 
       <section id="catalog" class="catalog-section" aria-label="游戏目录">
-        <div class="catalog-heading"><div><span class="overline">YOUR ROM COLLECTION</span><h2>游戏目录 <span class="counter">{{ matchingGames.length.toString().padStart(2, '0') }}</span></h2></div><span class="catalog-tip">{{ catalogOnly ? '小咪 Hack ROM 收藏目录' : '来自你的本地 ROM 扫描' }} <span>↘</span></span></div>
+        <div class="catalog-heading"><div><span class="overline">YOUR ROM COLLECTION</span><h2>游戏目录 <span class="counter">{{ matchingGames.length.toString().padStart(2, '0') }}</span></h2></div><span class="catalog-tip">{{ remoteLibrary ? '小咪 Hack ROM 资源库' : '来自你的本地 ROM 扫描' }} <span>↘</span></span></div>
         <div v-if="loading" class="center-state">正在读取游戏目录...</div>
-        <div v-else-if="loadError" class="center-state error">无法加载 games.json：{{ loadError }}</div>
+        <div v-else-if="loadError" class="center-state error">无法加载资源目录：{{ loadError }}</div>
         <div v-else-if="!games.length" class="center-state empty"><div class="empty-icon">▣</div><h3>还没有收录 ROM</h3><p>在根目录 <code>roms.config.json</code> 配置你的本地 ROM 文件夹，然后执行 <code>npm run roms:scan</code>。页面不会凭空生成游戏和分类。</p></div>
         <div v-else-if="!matchingGames.length" class="center-state empty"><div class="empty-icon">⌕</div><h3>没有找到匹配的游戏</h3><p>可以调整平台、文件格式或搜索关键字。</p><button class="reset-button solid" type="button" @click="clearFilters">清除筛选</button></div>
         <div v-else class="game-grid">

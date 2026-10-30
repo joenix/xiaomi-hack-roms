@@ -2,11 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
+import { loadLibrary } from '../src/library.js';
 
 const source = (await readFile(new URL('../src/player.js', import.meta.url), 'utf8'))
   .replace('import.meta.env.BASE_URL', JSON.stringify('/'))
-  .replace('import.meta.env.MODE', 'TEST_MODE');
-function fixture({ mode = 'test', search, games = [], romExists = true, loaderOkay = true, loaderReady = true, playerSettings, savedEntries = {}, isolated = true } = {}) {
+  .replaceAll('import.meta.env.MODE', 'TEST_MODE')
+  .replace(/^import .*;$/gm, '');
+function fixture({ mode = 'test', playEnabled = true, search, games = [], romExists = true, loaderOkay = true, loaderReady = true, playerSettings, savedEntries = {}, isolated = true } = {}) {
   const classes = new Set();
   let content = '';
   const calls = [];
@@ -45,6 +47,7 @@ function fixture({ mode = 'test', search, games = [], romExists = true, loaderOk
     setTimeout, clearTimeout, queueMicrotask,
     fetch: async (url, options = {}) => {
       calls.push(`${options.method || 'GET'}:${url}`);
+      if (url.includes('/xiaomi-hack-roms-libraries/library.json?')) return { ok: true, json: async () => ({schemaVersion:1, catalog:'games.json', playerConfig:'player-config.json', playEnabled, notice:''}) };
       if (url.endsWith('games.json')) return { ok: true, json: async () => games };
       if (url.endsWith('player-config.json')) return { ok: true, json: async () => playerSettings || {language:'zh-CN',volume:0.5,autoplay:false,fullscreen:false,controls:{default:{},platforms:{},games:{}}} };
       if (url.includes('emulatorjs/data/loader.js')) return { ok: true, headers: { get: () => search?.includes('threads=1') ? 'application/javascript' : 'text/html' } };
@@ -55,7 +58,7 @@ function fixture({ mode = 'test', search, games = [], romExists = true, loaderOk
       throw Error('unexpected fetch ' + url);
     },
   };
-  runInNewContext(source, { ...ctx, TEST_MODE: mode });
+  runInNewContext(source, { ...ctx, loadLibrary: options => loadLibrary({...options,fetchImpl:ctx.fetch}), TEST_MODE: mode });
   return { classes, status, calls, window, saved };
 }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -273,9 +276,18 @@ test('PSP 缺少跨源隔离时给出正确错误，不盲目尝试下载镜像�
 });
 
 
-test('Pages 展示版直接提示未上线，不请求目录、ROM 或模拟器核心', async () => {
-  const x = fixture({ mode: 'pages', search: '?game=test-id', games: [live] });
+test('资源配置关闭游玩时不请求 ROM 或核心', async () => {
+  const x = fixture({ mode: 'pages', playEnabled: false, search: '?game=test-id', games: [live] });
   await sleep(10);
-  assert.match(x.status.innerHTML, /ROM 暂未上线/);
-  assert.deepEqual(x.calls, []);
+  assert.match(x.status.innerHTML, /暂未开放在线游玩/);
+  assert.equal(x.calls.some(c => c.includes('/roms/') || c.startsWith('script:')), false);
+});
+
+
+test('Pages 播放器从独立资源库读取 ROM 和播放器配置', async () => {
+  const x = fixture({mode:'pages',search:'?game=test-id',games:[live]});
+  await sleep(30);
+  assert.match(x.window.EJS_gameUrl, /^https:\/\/test.local\/xiaomi-hack-roms-libraries\/roms\/MD\//);
+  assert.ok(x.calls.includes('GET:https://test.local/xiaomi-hack-roms-libraries/player-config.json'));
+  assert.equal(x.classes.has('hidden'), true);
 });
