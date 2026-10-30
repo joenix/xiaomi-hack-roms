@@ -149,3 +149,7 @@
 
 .catalog-notice { margin: 0 0 20px; padding: 16px 20px; border: 1px solid #cbded9; border-radius: 12px; background: #effaf6; color: #235b4c; line-height: 1.7; font-size: 14px; }
 article.game-card { cursor: default; }
+.catalog-notice { position: relative; margin-top: -58px; margin-bottom: 16px; }
+.catalog-notice + .filter-panel { margin-top: 0; }
+article.game-card .game-arrow { font-size: 11px; }
+@media (max-width: 650px) { .catalog-notice { margin-top: -45px; } }
