@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue';
 import { loadLibrary, resolveLibraryAsset } from './library.js';
 
 const base = import.meta.env.BASE_URL;
@@ -28,6 +28,75 @@ const format = ref(query.get('format') || 'all');
 const folder = ref(query.get('folder') || 'all');
 const sort = ref(['name', 'name-desc', 'size-desc', 'size-asc', 'modified'].includes(query.get('sort')) ? query.get('sort') : 'name');
 
+const selectedId = ref('');
+const filtersOpen = ref(false);
+const filterDialog = ref(null);
+watch(filtersOpen, async open => {
+  await nextTick();
+  if (open) filterDialog.value?.showModal();
+  else filterDialog.value?.close();
+});
+function revealSelection() {
+  const rail = document.querySelector('.game-rail');
+  const card = rail?.querySelector('.is-selected');
+  if (!card) return;
+  const target = rail.scrollLeft + card.getBoundingClientRect().left - rail.getBoundingClientRect().left - (rail.clientWidth - card.clientWidth) / 2;
+  rail.scrollTo({ left: target, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+}
+
+const selectedGame = computed(() => matchingGames.value.find(g => g.id === selectedId.value) || matchingGames.value[0]);
+const clock = ref('');
+let clockTimer, gamepadFrame;
+let lastPad = 0;
+function updateClock() { clock.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+let railGesture = false, railTimer;
+function startRailGesture() { railGesture = true; }
+function settleRail(event) {
+  if (!railGesture) return;
+  clearTimeout(railTimer);
+  const rail = event.currentTarget;
+  railTimer = setTimeout(() => {
+    railGesture = false;
+    const bounds = rail.getBoundingClientRect();
+    const center = bounds.left + bounds.width / 2;
+    const cards = [...rail.querySelectorAll('.game-card')];
+    const nearest = cards.reduce((best, card) => {
+      const rect = card.getBoundingClientRect();
+      const distance = Math.abs(rect.left + rect.width / 2 - center);
+      return !best || distance < best.distance ? { card, distance } : best;
+    }, null);
+    const index = cards.indexOf(nearest?.card);
+    if (index >= 0) selectedId.value = matchingGames.value[index].id;
+  }, 160);
+}
+function selectGame(game) { railGesture = false; selectedId.value = game.id; }
+function moveSelection(delta) {
+  const list = matchingGames.value;
+  if (!list.length) return;
+  const index = Math.max(0, list.findIndex(g => g.id === selectedGame.value?.id));
+  selectedId.value = list[(index + delta + list.length) % list.length].id;
+  nextTick(() => document.querySelector('.game-card.is-selected')?.focus({ preventScroll: true }));
+}
+function launchSelected() { if (selectedGame.value && !catalogOnly.value) location.href = playUrl(selectedGame.value); }
+function handleKey(event) {
+  if (['INPUT', 'SELECT', 'TEXTAREA'].includes(event.target.tagName)) return;
+  if (event.key === 'Escape') { filtersOpen.value = false; return; }
+  if (filtersOpen.value) return;
+  if (event.key === 'Enter' && event.target.closest('.game-card')) { event.preventDefault(); launchSelected(); return; }
+  if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') { event.preventDefault(); moveSelection(event.key === 'ArrowRight' ? 1 : -1); }
+}
+function pollGamepad(time) {
+  const pad = navigator.getGamepads?.()?.[0];
+  if (pad && time - lastPad > 240 && !filtersOpen.value) {
+    if (pad.buttons[15]?.pressed || pad.axes[0] > .6) { moveSelection(1); lastPad = time; }
+    else if (pad.buttons[14]?.pressed || pad.axes[0] < -.6) { moveSelection(-1); lastPad = time; }
+    else if (pad.buttons[0]?.pressed) { launchSelected(); lastPad = time; }
+  }
+  gamepadFrame = requestAnimationFrame(pollGamepad);
+}
+onMounted(() => { updateClock(); clockTimer = setInterval(updateClock, 1000); window.addEventListener('keydown', handleKey); gamepadFrame = requestAnimationFrame(pollGamepad); });
+onUnmounted(() => { clearInterval(clockTimer); cancelAnimationFrame(gamepadFrame); clearTimeout(railTimer); window.removeEventListener('keydown', handleKey); });
+
 function unique(field) {
   return [...new Set(games.value.map(g => g[field]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN', { numeric: true }));
 }
@@ -53,6 +122,7 @@ const matchingGames = computed(() => {
     return name();
   });
 });
+watch(selectedGame, () => nextTick(revealSelection));
 const filtered = computed(() => search.value.trim() || platform.value !== 'all' || format.value !== 'all' || folder.value !== 'all' || sort.value !== 'name');
 function clearFilters() { search.value = ''; platform.value = 'all'; format.value = 'all'; folder.value = 'all'; sort.value = 'name'; }
 function countFor(id) { return id === 'all' ? games.value.length : games.value.filter(game => game.platform === id).length; }
@@ -103,75 +173,42 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="site-shell">
-    <header class="site-header">
-      <div class="container nav-layout">
-        <a :href="base" class="brand" aria-label="小咪 Hack Roms 首页">
-          <span class="brand-mark" aria-hidden="true"><i class="cross">✚</i><i class="buttons">●●</i></span>
-          <span class="brand-name">小咪 <strong>Hack Roms</strong><small>RETRO GAMES, REIMAGINED</small></span>
-        </a>
-        <nav class="main-links" aria-label="顶部导航"><a :href="base" class="selected">游戏大厅</a><a href="#filters">检索游戏</a></nav>
-        <a class="nav-action" href="#catalog">浏览游戏 <span>↗</span></a>
-      </div>
+  <div class="console-shell">
+    <div class="ambient" aria-hidden="true"><img v-if="selectedGame?.cover && !failedCovers.has(selectedGame.id)" :key="selectedGame.id" :src="fileUrl(selectedGame.cover)" @error="markFailedCover(selectedGame.id)" /></div>
+    <header class="console-header">
+      <a :href="base" class="brand"><span class="brand-icon">✚</span> 小咪 <span>Hack Roms</span></a>
+      <span class="header-divider"></span><span class="current-section">游戏</span>
+      <div class="header-actions"><button @click="filtersOpen = !filtersOpen" :aria-expanded="filtersOpen" aria-controls="filters">⌕ <span>搜索与筛选</span></button><time>{{ clock }}</time><span class="profile" aria-label="小咪游戏库">咪</span></div>
     </header>
-
-    <section class="hero">
-      <div class="container hero-copy">
-        <div class="hero-eyebrow"><span class="dot"></span> MADE BY 小咪 · HACK ROMS</div>
-        <h1>熟悉的游戏，<br /><em>{{ catalogOnly ? '在这里发现。' : '打开就能玩。' }}</em></h1>
-        <p>FC / MD / SFC / GBA / PSP<br class="mobile-only" /> 五大游戏平台，{{ catalogOnly ? '一站浏览与检索。' : '一站检索、直接开玩。' }}</p>
-      </div>
-    </section>
-
-    <main class="container site-main">
+    <main>
+      <nav class="platforms" aria-label="游戏平台"><button v-for="sys in platforms" :key="sys.id" :class="{ active: platform === sys.id }" :aria-pressed="platform === sys.id" @click="platform = sys.id">{{ sys.name }}<span>{{ countFor(sys.id) }}</span></button></nav>
+      <dialog ref="filterDialog" id="filters" class="filter-panel" aria-label="搜索与筛选" @close="filtersOpen = false" @click="event => { if (event.target === filterDialog) filtersOpen = false; }">
+        <div class="filter-title"><h2>找到下一场冒险</h2><button @click="filtersOpen = false" aria-label="关闭筛选">✕</button></div>
+        <input v-model="search" type="search" placeholder="搜索游戏名称、ROM 或路径" aria-label="搜索游戏" />
+        <div class="filter-fields"><label>文件格式<select v-model="format"><option value="all">全部格式</option><option v-for="ext in fileFormats" :key="ext" :value="ext">{{ ext.toUpperCase() }}</option></select></label><label>文件夹<select v-model="folder"><option value="all">全部文件夹</option><option v-for="dir in folders" :key="dir" :value="dir">{{ dir }}</option></select></label><label>排序<select v-model="sort"><option value="name">名称 A → Z</option><option value="name-desc">名称 Z → A</option><option value="modified">最近更新</option><option value="size-desc">大小 ↓</option><option value="size-asc">大小 ↑</option></select></label></div>
+        <button class="text-button" :disabled="!filtered" @click="clearFilters">重置筛选</button><button class="text-button" @click="filtersOpen = false">完成 · {{ matchingGames.length }} 款游戏</button>
+      </dialog>
+      <div class="collection-label"><span>你的游戏库 <b>{{ matchingGames.length }}</b></span><button v-if="filtered" class="text-button" @click="clearFilters">清除筛选 ×</button><span v-else>经典，再次出发</span></div>
+      <div v-if="loading" class="center-state" role="status">正在读取游戏库…</div>
+      <div v-else-if="loadError" class="center-state" role="alert">无法加载资源目录：{{ loadError }}</div>
+      <div v-else-if="!matchingGames.length" class="center-state"><h2>{{ games.length ? '没有找到匹配的游戏' : '游戏库暂无游戏' }}</h2><p>试试其他关键字或平台。</p><button @click="clearFilters">清除筛选</button></div>
+      <template v-else>
+        <div class="rail-controls"><button aria-label="上一款游戏" @click="moveSelection(-1)">←</button><button aria-label="下一款游戏" @click="moveSelection(1)">→</button></div>
+        <section class="game-rail" aria-label="选择游戏" @touchstart.passive="startRailGesture" @wheel.passive="startRailGesture" @scroll.passive="settleRail"><div class="game-grid">
+          <button v-for="game in matchingGames" :key="game.id" class="game-card" :class="{ 'is-selected': selectedGame?.id === game.id }" :aria-pressed="selectedGame?.id === game.id" :aria-label="`选择 ${game.title}`" @click="selectGame(game)" @focus="selectGame(game)">
+            <div class="cover-frame" :class="`cover-${game.platform.toLowerCase()}`"><div v-if="!game.cover || failedCovers.has(game.id)" class="cover-fallback"><span class="fallback-symbol">✚</span><strong>{{ shortName(game.title) }}</strong><span class="fallback-label">{{ game.platform }} · 暂无封面</span></div><div v-else class="cover-art"><img :src="fileUrl(game.cover)" :alt="`${game.title} 封面`" loading="lazy" decoding="async" @error="markFailedCover(game.id)" /></div><span class="cover-platform">{{ game.platform }}</span></div>
+            <span class="tile-title">{{ game.title }}</span>
+          </button>
+        </div></section>
+        <section v-if="selectedGame" :key="selectedGame.id" class="game-detail" aria-label="选中的游戏">
+          <div class="detail-copy"><div class="eyebrow"><span class="status-dot"></span>{{ selectedGame.platform }} <span> / </span> HACK ROM COLLECTION</div><h1>{{ selectedGame.title }}</h1><p class="subtitle">{{ selectedGame.subtitle || '熟悉的世界，全新的可能。' }}</p><div class="detail-meta"><span>{{ (selectedGame.format || 'ROM').toUpperCase() }}</span><span>{{ formatSize(selectedGame.sizeBytes) }}</span><span v-if="formatDate(selectedGame.modifiedAt)">更新于 {{ formatDate(selectedGame.modifiedAt) }}</span></div>
+          <div class="detail-actions"><a v-if="!catalogOnly" class="launch-button" :href="playUrl(selectedGame)"><span>▶</span> 开始游戏</a><button v-else class="launch-button" disabled>暂未开放游玩</button><span class="selection-count">{{ matchingGames.findIndex(g => g.id === selectedGame.id) + 1 }} <i>/ {{ matchingGames.length }}</i></span></div>
+          <details class="file-details"><summary>游戏文件信息</summary><p>{{ selectedGame.sourceName || selectedGame.rom }}</p><p v-if="selectedGame.folder">{{ selectedGame.folder }}</p></details></div>
+          <div class="detail-art" aria-hidden="true"><img v-if="selectedGame.cover && !failedCovers.has(selectedGame.id)" :src="fileUrl(selectedGame.cover)" @error="markFailedCover(selectedGame.id)" /><span v-else>{{ shortName(selectedGame.title) }}</span></div>
+        </section>
+      </template>
       <p v-if="notice" class="catalog-notice" role="status">{{ notice }}</p>
-      <section id="filters" class="filter-panel" aria-label="游戏检索筛选面板">
-        <div class="panel-heading"><div><span class="panel-kicker">FIND A GAME</span><h2>发现游戏<span class="heading-accent">.</span></h2></div><span class="panel-caption">SEARCH · FILTER · PLAY</span></div>
-        <div class="search-area">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7.2"/><path d="m16.5 16.5 5 5"/></svg>
-          <input v-model="search" type="search" placeholder="搜索名称、ROM 文件名、路径..." aria-label="搜索游戏" spellcheck="false" />
-          <span class="search-shortcut">{{ remoteLibrary ? '游戏资源库检索' : '本地目录检索' }}</span>
-        </div>
-        <div class="filter-grid">
-          <label class="filter-field"><span>游戏平台 · 来自一级目录</span><select v-model="platform" aria-label="游戏平台"><option value="all">全部平台</option><option v-for="sys in platforms.slice(1)" :key="sys.id" :value="sys.id">{{ sys.id }} · {{ sys.sub }}</option></select></label>
-          <label v-if="fileFormats.length" class="filter-field"><span>文件格式 · 扫描扩展名</span><select v-model="format" aria-label="文件格式"><option value="all">全部格式</option><option v-for="ext in fileFormats" :key="ext" :value="ext">.{{ ext.toUpperCase() }}</option></select></label>
-          <label v-if="folders.length" class="filter-field"><span>所在子文件夹</span><select v-model="folder" aria-label="所在子文件夹"><option value="all">全部文件夹</option><option v-for="dir in folders" :key="dir" :value="dir">{{ dir }}</option></select></label>
-          <label class="filter-field"><span>排序方式 · 文件信息</span><select v-model="sort" aria-label="排序方式"><option value="name">名称 A → Z</option><option value="name-desc">名称 Z → A</option><option value="modified">文件修改时间 · 最新</option><option value="size-desc">文件大小 · 从大到小</option><option value="size-asc">文件大小 · 从小到大</option></select></label>
-        </div>
-        <div class="platform-chips" aria-label="平台快捷筛选"><button v-for="sys in platforms" :key="sys.id" class="platform-chip" :class="{ active: platform === sys.id }" type="button" @click="platform = sys.id">{{ sys.name }} <span>{{ countFor(sys.id) }}</span></button></div>
-        <div class="filter-footer"><span class="result-count"><span class="small-dot"></span>已收录 <strong>{{ games.length }}</strong> 款 · 匹配 <strong>{{ matchingGames.length }}</strong> 款</span><button type="button" class="reset-button" :disabled="!filtered" @click="clearFilters">↺ 重置筛选</button></div>
-      </section>
-
-      <section id="catalog" class="catalog-section" aria-label="游戏目录">
-        <div class="catalog-heading"><div><span class="overline">YOUR ROM COLLECTION</span><h2>游戏目录 <span class="counter">{{ matchingGames.length.toString().padStart(2, '0') }}</span></h2></div><span class="catalog-tip">{{ remoteLibrary ? '小咪 Hack ROM 资源库' : '来自你的本地 ROM 扫描' }} <span>↘</span></span></div>
-        <div v-if="loading" class="center-state">正在读取游戏目录...</div>
-        <div v-else-if="loadError" class="center-state error">无法加载资源目录：{{ loadError }}</div>
-        <div v-else-if="!games.length" class="center-state empty"><div class="empty-icon">▣</div><h3>还没有收录 ROM</h3><p>在根目录 <code>roms.config.json</code> 配置你的本地 ROM 文件夹，然后执行 <code>npm run roms:scan</code>。页面不会凭空生成游戏和分类。</p></div>
-        <div v-else-if="!matchingGames.length" class="center-state empty"><div class="empty-icon">⌕</div><h3>没有找到匹配的游戏</h3><p>可以调整平台、文件格式或搜索关键字。</p><button class="reset-button solid" type="button" @click="clearFilters">清除筛选</button></div>
-        <div v-else class="game-grid">
-          <component :is="catalogOnly ? 'article' : 'a'" v-for="game in matchingGames" :key="game.id" class="game-card" :href="catalogOnly ? undefined : playUrl(game)" :aria-label="catalogOnly ? game.title : `游玩 ${game.title}`">
-            <div class="cover-frame" :class="`cover-${game.platform.toLowerCase()}`">
-              <div v-if="!game.cover || failedCovers.has(game.id)" class="cover-fallback">
-                <span class="fallback-symbol" aria-hidden="true">▧</span>
-                <strong>{{ shortName(game.title) }}</strong>
-                <span class="fallback-label">暂无封面 · {{ game.platform }}</span>
-              </div>
-              <div v-else class="cover-art">
-                <img :src="fileUrl(game.cover)" :alt="`${game.title} 封面`" loading="lazy" decoding="async" @error="markFailedCover(game.id)" />
-              </div>
-              <span class="cover-platform">{{ game.platform }}</span><span class="play-overlay">{{ catalogOnly ? 'ROM 暂未上线' : '▶ 立即游玩' }}</span>
-            </div>
-            <div class="game-info">
-              <h3 :title="game.title">{{ game.title }}</h3>
-              <p :title="game.sourceName || game.rom">{{ game.sourceName || game.rom }}</p>
-              <div class="game-meta"><span>{{ (game.format || 'ROM').toUpperCase() }} <span class="meta-sep">/</span> {{ formatSize(game.sizeBytes) }}</span><span class="game-arrow">{{ catalogOnly ? '未上线' : '↗' }}</span></div>
-              <span v-if="formatDate(game.modifiedAt)" class="file-date">文件修改于 {{ formatDate(game.modifiedAt) }}</span>
-            </div>
-          </component>
-        </div>
-        <p class="catalog-footnote">※ 平台、格式、路径、大小和文件修改时间来自本地扫描；不根据文件名臆测游戏玩法或版本性质。PSP 运行依赖 PPSSPP 核心、线程支持及浏览器兼容性。请仅使用有权使用、分发的 ROM。</p>
-      </section>
     </main>
-    <footer class="site-footer"><div class="container footer-row"><strong>小咪 <span>Hack Roms</span></strong><span>POWERED BY EMULATORJS · BUILT FOR RETRO LOVERS</span></div></footer>
+    <footer class="console-footer"><div><span class="key">←</span><span class="key">→</span> 切换游戏 <span class="footer-gap"><span class="key">Enter</span> 确认</span><span class="footer-gap">手柄：方向键切换 · A 启动</span></div><span>小咪的经典游戏空间</span></footer>
   </div>
 </template>
