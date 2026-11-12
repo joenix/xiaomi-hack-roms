@@ -29,6 +29,34 @@ const format = ref(query.get('format') || 'all');
 const folder = ref(query.get('folder') || 'all');
 const sort = ref(['name', 'name-desc', 'size-desc', 'size-asc', 'modified'].includes(query.get('sort')) ? query.get('sort') : 'name');
 
+const sortOptions = [
+  {id:'name',label:'名称顺序'}, {id:'name-desc',label:'名称逆序'},
+  {id:'modified',label:'最近更新'}, {id:'size-desc',label:'大文件优先'}, {id:'size-asc',label:'小文件优先'},
+];
+const sortTrack = ref(null);
+let sortTimer, sortDrag;
+function alignSort() {
+  const track=sortTrack.value;
+  if(track)track.scrollTo({top:Math.max(0,sortOptions.findIndex(o=>o.id===sort.value))*44,behavior:'instant'});
+}
+function settleSort(event) {
+  clearTimeout(sortTimer);const track=event.currentTarget;
+  sortTimer=setTimeout(()=>{
+    const index=Math.max(0,Math.min(sortOptions.length-1,Math.round(track.scrollTop/44)));
+    if(sort.value!==sortOptions[index].id && soundEnabled.value)consoleAudio.tick(true);
+    sort.value=sortOptions[index].id;
+  },160);
+}
+function chooseSort(index) {
+  const track=sortTrack.value;
+  if(track)track.scrollTo({top:index*44,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+}
+function dragSortStart(event) {if(event.pointerType==='mouse'){event.preventDefault();sortDrag={y:event.clientY,top:event.currentTarget.scrollTop,track:event.currentTarget,id:event.pointerId};event.currentTarget.setPointerCapture(event.pointerId);}}
+function dragSortMove(event) {if(sortDrag){event.preventDefault();sortDrag.track.scrollTop=sortDrag.top+sortDrag.y-event.clientY;}}
+function dragSortEnd(){if(sortDrag){const {track,id}=sortDrag;if(track.hasPointerCapture(id))track.releasePointerCapture(id);settleSort({currentTarget:track});sortDrag=null;}}
+onUnmounted(()=>clearTimeout(sortTimer));
+watch(sort,()=>nextTick(alignSort));
+
 const consoleAudio = createConsoleAudio();
 const soundEnabled = ref(true);
 try { soundEnabled.value = localStorage.getItem('console-sound') !== 'off'; } catch {}
@@ -80,14 +108,15 @@ function endPanelSwipe(event) {
 watch(detailsOpen,async open=>{await nextTick();if(open)gameDialog.value?.querySelector('button')?.focus({preventScroll:true});});
 watch(filtersOpen, async open => {
   await nextTick();
-  if (open) filterDialog.value?.querySelector('input')?.focus({preventScroll:true});
+  if (open) { alignSort(); filterDialog.value?.querySelector('input')?.focus({preventScroll:true}); }
   else searchTrigger.value?.focus({preventScroll:true});
 });
 function revealSelection() {
   const rail = document.querySelector('.game-rail');
   const card = rail?.querySelector('.is-selected');
   if (!card) return;
-  const target = rail.scrollLeft + card.getBoundingClientRect().left - rail.getBoundingClientRect().left - (rail.clientWidth - card.clientWidth) / 2;
+  const focusLeft = rail.clientWidth <= 700 ? (rail.clientWidth - card.clientWidth) / 2 : rail.clientWidth * .065;
+  const target = rail.scrollLeft + card.getBoundingClientRect().left - rail.getBoundingClientRect().left - focusLeft;
   rail.scrollTo({ left: target, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
 }
 
@@ -131,7 +160,7 @@ function settleRail(event) {
   railTimer = setTimeout(() => {
     railGesture = false;
     const bounds = rail.getBoundingClientRect();
-    const center = bounds.left + bounds.width / 2;
+    const center = bounds.left + (bounds.width <= 700 ? bounds.width / 2 : bounds.width * .065 + 87);
     const cards = [...rail.querySelectorAll('.game-card')];
     const nearest = cards.reduce((best, card) => {
       const rect = card.getBoundingClientRect();
@@ -257,7 +286,7 @@ onMounted(async () => {
       <div class="platform-wheel" aria-label="滑动切换游戏平台">
         <button class="wheel-arrow" aria-label="上一个平台" @click="cyclePlatform(-1)">‹</button>
         <div ref="platformTrack" class="platform-track" @pointerdown="event => { platformGesture = true; beginTrackDrag(event); }" @pointermove="dragTrack" @pointerup="endTrackDrag" @pointercancel="endTrackDrag" @touchstart.passive="platformGesture = true" @wheel.passive="platformGesture = true" @scroll.passive="settlePlatform">
-          <button v-for="sys in platforms" :key="sys.id" class="platform-stop" :aria-pressed="platform === sys.id" @click="platform = sys.id"><strong>{{ sys.id === 'all' ? '游戏库' : sys.name }}</strong><small>{{ sys.sub }} · {{ countFor(sys.id) }} 款游戏</small></button>
+          <button v-for="sys in platforms" :key="sys.id" class="platform-stop" :aria-pressed="platform === sys.id" @click="platform = sys.id"><strong>{{ sys.id === 'all' ? '游戏库' : sys.name }}</strong><small>{{ sys.sub }}</small></button>
         </div>
         <button class="wheel-arrow" aria-label="下一个平台" @click="cyclePlatform(1)">›</button>
       </div>
@@ -275,10 +304,10 @@ onMounted(async () => {
             <span class="tile-title">{{ game.title }}</span>
           </button>
         </div></section>
-        <div class="mobile-position" aria-label="切换游戏"><button aria-label="上一款游戏" @click="moveSelection(-1)">‹</button><span>{{ matchingGames.findIndex(g => g.id === selectedGame?.id) + 1 }}<i> / {{ matchingGames.length }}</i></span><button aria-label="下一款游戏" @click="moveSelection(1)">›</button></div>
+
         <section v-if="selectedGame" :key="selectedGame.id" class="game-detail" aria-label="选中的游戏">
           <div class="detail-copy"><div class="eyebrow"><span class="status-dot"></span>{{ selectedGame.platform }} <span> / </span> HACK ROM COLLECTION</div><h1>{{ selectedGame.title }}</h1><p class="subtitle">{{ selectedGame.subtitle || '熟悉的世界，全新的可能。' }}</p><div class="detail-meta"><span>{{ (selectedGame.format || 'ROM').toUpperCase() }}</span><span>{{ formatSize(selectedGame.sizeBytes) }}</span><span v-if="formatDate(selectedGame.modifiedAt)">更新于 {{ formatDate(selectedGame.modifiedAt) }}</span></div>
-          <div class="detail-actions"><a v-if="!catalogOnly" class="launch-button" :href="playUrl(selectedGame)"><span>▶</span> 开始游戏</a><button v-else class="launch-button" disabled>暂未开放游玩</button><button class="game-options" aria-label="查看游戏详情" @click="detailsOpen = true">···</button><span class="selection-count">{{ matchingGames.findIndex(g => g.id === selectedGame.id) + 1 }} <i>/ {{ matchingGames.length }}</i></span></div>
+          <div class="detail-actions"><a v-if="!catalogOnly" class="launch-button" :href="playUrl(selectedGame)"><span>▶</span> 开始游戏</a><button v-else class="launch-button" disabled>暂未开放游玩</button><button class="game-options" aria-label="查看游戏详情" @click="detailsOpen = true">···</button></div>
           <details class="file-details"><summary>游戏文件信息</summary><p>{{ selectedGame.sourceName || selectedGame.rom }}</p><p v-if="selectedGame.folder">{{ selectedGame.folder }}</p></details></div>
           <div class="detail-art" aria-hidden="true"><img v-if="selectedGame.cover && !failedCovers.has(selectedGame.id)" :src="fileUrl(selectedGame.cover)" @error="markFailedCover(selectedGame.id)" /><span v-else>{{ shortName(selectedGame.title) }}</span></div>
         </section>
@@ -291,8 +320,8 @@ onMounted(async () => {
       <section ref="filterDialog" id="filters" class="filter-panel filter-drawer" :class="{ active: filtersOpen }" :inert="!filtersOpen" :aria-hidden="!filtersOpen" aria-label="搜索与筛选" @pointerdown="startPanelSwipe" @pointerup="endPanelSwipe">
         <div class="drawer-heading"><button @click="filtersOpen = false" aria-label="返回游戏库">‹</button><h2>搜索游戏</h2></div>
         <input v-model="search" type="search" placeholder="搜索游戏名称、ROM 或路径" aria-label="搜索游戏" />
-        <div class="filter-fields"><label>文件格式<select v-model="format"><option value="all">全部格式</option><option v-for="ext in fileFormats" :key="ext" :value="ext">{{ ext.toUpperCase() }}</option></select></label><label>文件夹<select v-model="folder"><option value="all">全部文件夹</option><option v-for="dir in folders" :key="dir" :value="dir">{{ dir }}</option></select></label><label>排序<select v-model="sort"><option value="name">名称 A → Z</option><option value="name-desc">名称 Z → A</option><option value="modified">最近更新</option><option value="size-desc">大小 ↓</option><option value="size-asc">大小 ↑</option></select></label></div>
-        <button class="text-button" :disabled="!filtered" @click="clearFilters">重置筛选</button><button class="text-button" @click="filtersOpen = false">完成 · {{ matchingGames.length }} 款游戏</button>
+        <div class="filter-fields"><label>文件格式<select v-model="format"><option value="all">全部格式</option><option v-for="ext in fileFormats" :key="ext" :value="ext">{{ ext.toUpperCase() }}</option></select></label><label>文件夹<select v-model="folder"><option value="all">全部文件夹</option><option v-for="dir in folders" :key="dir" :value="dir">{{ dir }}</option></select></label><div class="sort-field"><span id="sort-wheel-label">排序 · 上下滑动</span><div class="sort-wheel"><div class="sort-highlight" aria-hidden="true"></div><div ref="sortTrack" class="sort-track" role="listbox" aria-labelledby="sort-wheel-label" :aria-activedescendant="`sort-${sort}`" tabindex="0" @scroll.passive="settleSort" @pointerdown="dragSortStart" @pointermove="dragSortMove" @pointerup="dragSortEnd" @pointercancel="dragSortEnd" @keydown.down.prevent="chooseSort(Math.min(sortOptions.length-1,sortOptions.findIndex(o=>o.id===sort)+1))" @keydown.up.prevent="chooseSort(Math.max(0,sortOptions.findIndex(o=>o.id===sort)-1))"><button v-for="(option,index) in sortOptions" :id="`sort-${option.id}`" :key="option.id" class="sort-stop" role="option" :aria-selected="sort===option.id" tabindex="-1" @click="chooseSort(index)">{{ option.label }}</button></div></div></div></div>
+        <button class="text-button" :disabled="!filtered" @click="clearFilters">重置筛选</button><button class="text-button" @click="filtersOpen = false">返回游戏库</button>
       </section>
     <section ref="gameDialog" class="filter-panel filter-drawer game-sheet" :class="{ active: detailsOpen }" :inert="!detailsOpen" :aria-hidden="!detailsOpen" aria-label="游戏详情" @pointerdown="startPanelSwipe" @pointerup="endPanelSwipe">
       <template v-if="selectedGame"><div class="drawer-heading"><button aria-label="返回游戏库" @click="detailsOpen = false">‹</button><h2>游戏详情</h2></div><h3>{{ selectedGame.title }}</h3><p>{{ selectedGame.platform }} · {{ formatSize(selectedGame.sizeBytes) }}</p><p class="sheet-file">{{ selectedGame.sourceName || selectedGame.rom }}</p><p v-if="formatDate(selectedGame.modifiedAt)">更新于 {{ formatDate(selectedGame.modifiedAt) }}</p></template>
